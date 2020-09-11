@@ -1,0 +1,601 @@
+<HTML><HEAD>
+<TITLE>Recv390 V1R1M6</TITLE>
+<META NAME="Author"  CONTENT="Edgar Hofmann">
+<META NAME="Email"   CONTENT="hofmann_e@arcor.de">
+<META NAME="Created" CONTENT="20080123">
+</HEAD><BODY>
+ 
+<big>Title: Recv390 V1R1M6</big>
+</pre><!--NewPage--><pre>   
+</pre><H1 style="page-break-after:avoid;">Part: Introduction</H1><pre> 
+ 
+</pre><p>  
+This is modifcation 6 of <B>RECV390</B>. RECV390 is a commandline tool for extracting on mainframe transmitted files on a PC.
+TSO <B>TRANSMIT</B> or short XMIT is a technique used on mainframe to pack a file or members of a PDS file into a
+sequential file in order to ease transportation between mainframes. Mainframe <B>PDS</B> can be considered in some way as
+a single directory, with PDS-members as files within. As other file types like VSAM and sequential files are possible to
+XMIT, the main application of TSO TRANSMIT is today the unloading of PDS for a later restore (TSO RECEIVE). The
+counterpart of the TSO TRANSMIT is therefore TSO <B>RECEIVE</B> to recreate the  original file. The process is comparable
+to TAR in UNIX environments. Like native TAR, there is no builtin compression. RECV390 enables to RECEIVE such mainframe
+xmitted files on a PC, and hence to view and extract the contents of this files without the need to access a mainframe.
+</pre><p>  
+There are some other tools for this purpose in place like XMIT-manager. For a comprehensive overview see
+ 
+ <a href="http://www.planetmvs.com/unxmit/index.html">UnXMIT information exchange from David Alcock</a>.
+ 
+When I searched for a commandline program for receiving such files on PC, I found RECV390. The program is completely
+controlled via arguments and therefore usable for scripting purposes. Another issue is the availablity of the source,
+which makes it possible, to add lacking functionality (and to correct some errrors), and to port and use it in LINUX
+environments.
+ 
+RECV390 was developed by James M. Morrison of Enhanced Software Services, Inc. in 2000, and was later released
+with source code to public domain with Version V1R1M4.
+ 
+The original code and its documentation is still valid in most cases. Please consider to refer the
+ <a href="./recv390v1r1m4.html">original documentation</a>
+for operating. The documentation below only applies to changes since this level.
+</p><pre>  
+</pre><!--NewPage--><pre>   
+</pre><H1 style="page-break-after:avoid;">Part: General Issues about the Package</H1><pre> 
+ 
+</pre><H2 style="page-break-after:avoid;">Chapter: Preface</H2><pre> 
+</pre><p>  
+My first interest was to enhance RECV390 <B>to be suitable for my needs</B>. So most changes are implemented from my special
+point of view. Originally J. M. Morrsion wrote RECV390 to extract the members of a XMIT-file, created from a PDS
+with
+RECFM=[F|V]B
+on a mainframe, containing text oriented contents, to a PC directory.
+ 
+For this case RECV390 works well, and in fact I am convinced, this is the most important case still in practice. Only a
+few of my changes relate to bugs in the original code, like <I>Bug Fix Zero-Bytes Trailer Blocks IEBCOPY</I> or Bug Fix <I>Multi-Segment Control Records</I>
+which occur in a very special situations. The other changes were driven to handle special PDS contents and hence XMIT files
+like <B>Embedded XMIT</B> and <B>Member Alias</B>. Another group of changes relates to the usability of the program on PC.
+E.g. <B>Single Member Extract</B>.
+</pre><p>  
+The source of RECV390 is written in C. The style of the coding of J.M. Morrison is a little bit exotic, while mainframers
+should feel some sympathy for this kind of coding C programs. I kept the code and functionality as most as possible, and
+tried to implement the changes in a very smooth way. So the original documentation is still valid. I made only one exeption.
+The default extension for PC files is no more .TXT but .ASC .
+</pre><p>  
+You can get a comprehensive list of changes incorporated in the current release of RECV390 use the parameter <B>+about</B> at the
+command prompt.
+</p><pre>  
+</pre><table width="100%" border="1"><tr><td><pre>   
+ $recv390 +about
+ 
+ Copyright 2000, 2001, Enhanced Software Services, Inc.
+ V1R1M4 - doc & license at http://ensose.com/recv390.html
+ Copyright 2007, V1R1M6 - Open Source, Edgar Hofmann. hofmann_e@arcor.de.
+ eho V1R1M6 20071227: Default Extension .ASC
+ eho V1R1M6 20071227: Bug Fix Zero-Bytes Trailer Blocks IEBCOPY
+ eho V1R1M5 20071207: Embedded XMIT
+ eho V1R1M5 20071206: Path Specification
+ eho V1R1M5 20071205: Binary Extract
+ eho V1R1M5 20071204: Alias Processing
+ eho V1R1M5 20071202: Single Member Extract
+ eho V1R1M5 20071130: Multi-Segment Control Records
+</pre></table><pre>  
+ 
+</pre><H2 style="page-break-after:avoid;">Chapter: Parameter Parsing</H2><pre> 
+</pre><p>  
+Some annotations to parmeter parsing in RECV390. Parameter handling differs from standard Linux or Windows . Generally
+a prefix plus means in RECV390, the value is active. In contrast prefix minus inactivates a parameter. The default prefixes
+for the keywords can be found with the <B>+switch</B> switch on the command prompt.
+</p><pre>  
+</pre><table width="100%" border="1"><tr><td><pre>   
+ $recv390 +syntax
+ 
+ Syntax: [options...] [[path]fn[.exti] [exto]]
+ 
+ path      path name of input file (default=current directory)
+ fn[.exti] input file name (default fn=OS390 ext=XMI)
+ [exto]    output file extension (default=ASC)
+           output fn = PDS member name
+                                             Help (default: not displayed
+ Default options    on/yes(+)   off/no(-)          unless error occurs):
+ ------------------------------------------- ------------------------------
+ +tran    translate from EBCDIC to ASCII     -about    copyright & version
+ -seq     remove sequence field              -help     general help
+ +trim    remove trailing blanks             -syntax   syntax help
+ -rdw     no OS/390 RDW                      -helpbug  debug help
+ +dir     display PDS directory              -helptran translation help
+ +write   write output file(s)               -helprdw  RDW help
+ +halt    issue <press enter> prompt         -helpseq  sequence field help
+ +xmisum  display TRANSMIT dataset summary
+ +dsattr  display dataset attributes
+ -dirhex  don't display directory entries'
+          userdata in hex
+ -member  extract single member. exto is membername.exto
+ -binary  extract binary
+ xpath=   specification of the extract path (optional)
+ tranmap= specification of a fully qualified translation table (optional)
+ -map     don't show translation table
+</pre></table><pre>  
+</pre><p>  
+<B>Below a list of the used parameter types in RECV390:</B> 
+</p><pre>  
+</pre><table width="100%" border="1"><tr><td><pre>   
+ (1) switches ................: Original RECV390. Toggle Switches + and - .
+                                Plus prefix means switch is active, while
+                                minus prefix is the negation of the parameter.
+ 
+                                Example:
+                                   recv390 -dir my.pds.xmi     will NOT show directory information
+                                   recv390 +dir my.pds.xmi     will show directory information
+ 
+                                This is a little bit exotic, because standard parameter
+                                handling in Linux / WIN32 would interpret first example
+                                as dir parameter active, and the second example as syntax error (maybe).
+ 
+ 
+ (2) keyword=value parameters : New introduced with RECV390 1.1.5.
+                                Can appear in any order and mixed with positional parameters.
+                                But must appear after any switch. hyphen as prefix character
+                                not allowed. See above.
+ 
+                                Example:
+                                   recv390 +write my.pds.xmi xpath=/tmp/ asc
+ 
+                                In this example, the parameter xpath= is between
+                                the first positional parm my.pds, which describes the
+                                xmit-dataset to extract, and the second positional parameter
+                                which describes the output extension.
+ 
+ (3) positional ..............: Original RECV390.
+                                Order is significant, which is basically true for positional parameters.
+                                Can be mixed with keyword=value parameters, but must appear after any
+                                switch. At this time, two positional parameters are valid in RECV390.
+ 
+                                  1st: input dataset
+                                  2nd: output extension
+</pre></table><pre>  
+ 
+</pre><H2 style="page-break-after:avoid;">Chapter: RECV* Messages</H2><pre> 
+</pre><p>  
+In Modification 5 of RECV390 a new message format was introduced. It applies only to the new or changed functionalities in the
+program. It is similar to the scheme known in MVS. Additionally to the message text, the identifier of the message contains
+information. This approach facliitates scripting based on message identifiers. All this messages are routed to <B>stderr</B>.
+See the the explanation below for the structure of the message identifier.
+</p><pre>  
+</pre><table width="100%" border="1"><tr><td><pre>   
+<B> Format Description:</B> 
+ 
+                                           RECV....        <I>   prefix                                                      </I>
+                                               f...        <I>   component                                                   </I>
+                                                nn.        <I>   number                                                      </I>
+                                                  I        <I>   Severity: Information                                       </I>
+                                                  W        <I>   Severity: Warning.     Maybe correct. Check it              </I>
+                                                  E        <I>   Severity: Error.       Not expected Result                  </I>
+                                                  S        <I>   Severity: Severe Error Syntax error or othe severe error    </I>
+        Output to stderr.
+ 
+<B> Example:</B> 
+ 
+ RECV010I Member MEM1     . Extract to File c:\temp\mem1.asc .
+ RECV011W Member MEM1     . Not found.
+ RECV014W Member MEM1     . No Output.
+ RECV012I Member MEM1     . Extract Done. File c:\temp\mem1.asc .
+ RECV013I Member MEM1     . Stats: 3223 Bytes, 102 Recs.
+ RECV015E File z:/temp/mem1.asc . Open error
+</pre></table><pre>  
+ 
+</pre><H2 style="page-break-after:avoid;">Chapter: RECV390 Message: Warning - # PDS members vs. # files written mismatch</H2><pre> 
+</pre><p>  
+While in Single Member Extract mode this message will appear nearly in all cases. The message simply tells the fact, that
+there are more members in the XMIT file than extracted. In Single Member extract this is no error, because we extracting only a subset
+of one member out of a PDS. I decided keeping the message in the source, because the contents of the message is true,
+although a little bit confusing. If Aliases exist in the XMIT file, this message will appear too. RECV390 counts an alias
+as a member.
+</p><pre>  
+</pre><H2 style="page-break-after:avoid;">Chapter: License & Packaging</H2><pre> 
+</pre><p>  
+The existing copyrights of RECV390 V1R1M4 as described in the
+<a href="./recv390v1r1m4.html#license">Documentation</a>
+of this release are not touched in any way. The changes and additions I have done, and which not covered by this license above, are protected
+by the terms of
+<a href="./gpl-3.0.txt"><b>GNU Public License Version 3</b></a>
+ 
+</p><pre>  
+</pre><table width="100%" border="1"><tr><td><pre>   
+ 
+<B>   Package Contents:</B> 
+ 
+   ---  recv390v1r1m6.html                      doc changes V1R1M6. This file
+   ---  recv390.c                               modified source V1R1M6
+   ---  recv390.exe                             executable WIN32 (compiled MingW)
+   ---  recv390v1r1m4.html                      original documentation V1R1M4
+   ---  gpl-3.0.txt                             GNU General Public License Version 3.0
+ 
+   ---  V1R1M4                                  this is the original Release
+           ---- makefile
+           ---- readme.txt
+           ---- recv390.c
+           ---- RECV390.EXE
+           ---- recv390.html
+ 
+</pre></table><pre>  
+</pre><!--NewPage--><pre>   
+</pre><H1 style="page-break-after:avoid;">Part: Description of the individual Modifications</H1><pre> 
+ 
+</pre><H2 style="page-break-after:avoid;">Chapter: Bug Fix: Multi-Segment Control Records</H2><pre> 
+</pre><p>  
+eho 20071130 V1R1M5
+</p><pre>  
+</pre><H3 style="page-break-after:avoid;">Topic: Symptom Description</H3><pre> 
+</pre><p>  
+RECV390 V1R1M4 fails to handle multi segments. In normal cases, control records don't
+span more segments, so there is no pain. But in one special case control record INMR02
+can be quite large. The INMR02 type record holds information about the transmitted file
+and the information needed to restore. When the TRANSMIT command is invoked with the MEMBERS subparameter,
+the member names are stored in a INMR02 control record. So the chance to grow above
+the max length of 253 bytes with this parameter is very likely in this case. RECV390 terminates
+in this situation with a message <B>unknown segment key</B>.
+</p><pre>  
+</pre><table width="100%" border="1"><tr><td><pre>   
+$recv390 user1.pds.xmi
+ 
+TSO TRANSMIT dataset sent to user X at node Y
+from user USER1 at node ???????? on 11/20/2007 at 11:02:55
+contains one file.
+<B>unknown segment key 05</B> 
+pos 2, seglen 111
+&lt;snap&gt; 0040FCB0.111 (0x006F) line
+0040FCB0 0000  00055b5b d4c1d500 025bd100 05e2d4d7 *  $$MAN  $J  SMP*
+0040FCC0 0010  f0f00005 e2d4d7f1 f00005e2 d4d7f1f2 *00  SMP10  SMP12*
+0040FCD0 0020  0005e2d4 d7f2f000 06e2d4d7 f3f1c400 *  SMP20  SMP31D *
+0040FCE0 0030  06e2d4d7 f3f1c700 06e2d4d7 f3f1e300 * SMP31G  SMP31T *
+0040FCF0 0040  06e2d4d7 f3f2c400 06e2d4d7 f3f2c700 * SMP32D  SMP32G *
+0040FD00 0050  06e2d4d7 f3f2e300 06e2d4d7 f3f3c400 * SMP32T  SMP33D *
+0040FD10 0060  06e2d4d7 f3f3c700 06e2d4d7 f3f3e3   * SMP33G  SMP33T*
+</pre></table><pre>  
+ 
+</pre><table width="100%" border="1"><tr><td><pre>   
+<B>Example: TRANSMIT with MEMBERS parameter</B> 
+ 
+  TSO TRANSMIT NODE.USER INDSNAME(USER1.PDS)     -
+                MEMBERS(AAA BBB                  -
+                        CCCCCC DDDDDDDD EEEE     -
+                        :::
+                        ZZZZ )                   -
+                OUTDSN(USER1.PDS.XMI) NOLOG
+</pre></table><pre>  
+ 
+</pre><H3 style="page-break-after:avoid;">Topic: Solution</H3><pre> 
+</pre><p>  
+Inserted code to handle multi segmented records in function getseg(). This applies only
+to record identifier 0x20 (control records), because for data records there is a logic already in place
+(getblock() and getseg()). The inserted coding is not the best but compacted to one place without
+disturbing the existing logic. Size of vars line and tranline controlled via DEFINE LINE_SIZE.
+8192 bytes as default. This should be enough to hold a explicit MEMBERS list of ca. 900 members.
+</pre><p>  
+<I>Clearification: This limit applies only to the memberlist stored in the INMR02</I> 
+<I>record when the MEMBERS parameter in the TRANSMIT command is used. When working without</I> 
+<I>this TRANSMIT parameter, all members of the PDS are xmitted and no memberlist is stored.</I> 
+</p><pre>  
+</pre><H2 style="page-break-after:avoid;">Chapter: Bug Fix: Zero Byte IEBCOPY Trailer Blocks</H2><pre> 
+</pre><p>  
+eho 20071227 V1R1M6
+</p><pre>  
+</pre><H3 style="page-break-after:avoid;">Topic: Symptom Description</H3><pre> 
+</pre><p>  
+In some rare cases RECV390 original code cannot handle IEBCOPY blocks with a data length of zero bytes. In the IEBCOPY
+unload format this blocks are found occasionally at the end of an member. RECV390 misses this special type of end
+and joins two members errounous together. With this error the relation between directory entry and data of the members gets
+out of sequence. The next directory entry points now to the next plus next member data. This is typical to the program logic of RECV390.
+Described shortly, the program logic depends on the fact that directory and data are in the same order.
+</pre><p>  
+A reliable symptom for the destroyed sequence is message of <B>error; ISPF statistics records</B>. At this point of
+extraction, all output is in error. Using the <B>-halt</B>  will not stop processing at the prompt, but will also not
+solve the error situation.
+</p><pre>  
+</pre><table width="100%" border="1"><tr><td><pre>   
+$recv390 user1.pds.xmi
+ 
+TSO TRANSMIT dataset sent to user X at node Y
+from user USER1 at node ???????? on 12/18/2007 at 14:35:54
+contains one file.
+ 
+Dataset USER1.PDS
+Dsorg PO recfm FB blksize 5600 lrecl 80
+ 
+                                                    ----- LINES -----
+MEMBER      TTR IB VV.MM    CREATED         MODIFIED   CUR  INIT   MOD USERID
+MEMBER1  000217 0F 04.75 2007/12/18 2007/12/18 09:35    12    12     0 USER1
+MEMBER2  000209 0F 01.00 2007/12/18 2007/12/18 09:26    43    43     0 USER1
+MEMBER3  000213 0F 04.75 2007/12/18 2007/12/18 09:34    15    15     0 USER1
+MEMBER4  000104 0F 01.00 2007/12/18 2007/12/18 09:24   960   960     0 USER1
+ 
+There are 4 member(s) in the PDS directory.
+ 
+output            bytes    records
+filename        written    written
+------------ ---------- ----------
+member1.txt       77139        960 OK
+member2.txt        1230         15 error; ISPF statistics records: 43
+Press enter to continue, or type 'x' to exit
+</pre></table><pre>  
+</pre><H3 style="page-break-after:avoid;">Topic: Solution</H3><pre> 
+</pre><p>  
+Corrected the increment of the counters to detect the end of a member even when a zero byte trailer is in place.
+</p><pre>  
+</pre><H2 style="page-break-after:avoid;">Chapter: Single Member Extract</H2><pre> 
+</pre><p>  
+eho 20071202 V1R1M5
+</p><pre>  
+</pre><H3 style="page-break-after:avoid;">Topic: Overview</H3><pre> 
+</pre><p>  
+The original RECV390 code extracts all Members of a transmitted PDS into the current
+directory. There are no filters in place. The target directory for extraction is the current directory without
+any possibilitiy to change.
+</p><pre>  
+</pre><H3 style="page-break-after:avoid;">Topic: Solution</H3><pre> 
+</pre><p>  
+This is a combined solution of the topics addressed above. I have inserted some coding to extract
+a <B>single member to an optional path</B>. The single member extraction is triggered with a new
+parm <B>+member</B> and an additional parm value describing the path, membername and extension.
+The parm processing follows the original logic. +member means the parm is active, while
+-member means no single member extraction. This is the default.
+</p><pre>  
+</pre><table width="100%" border="1"><tr><td><pre>   
+<B> Examples:</B> 
+ 
+      (1)  $ recv390 +member MY.PDS.XMI testmem
+ 
+           if TESTMEM is found as a member in the PDS the member will be
+           extracted to ./TESTMEM into the current directory.
+ 
+      (2)  $ recv390 +member MY.PDS.XMI /tmp/testmem
+ 
+           if TESTMEM is found as a member in the PDS the member will be
+           extracted to ./testmem into the directory /tmp .
+ 
+           WIN32 path are supported: c:\temp\testmem will extract testmem into c:\temp
+ 
+      (3)  $ recv390 +member MY.PDS.XMI /tmp/testmem.txt
+ 
+           if TESTMEM is found as a member in the PDS the member will be
+           extracted to ./testmem.txt into the directory /tmp .
+</pre></table><pre>  
+</pre><p>  
+The membername is constructed from the substr starting after the last (back-)slash,
+ending at the first occurence of a colon after start and with a maximum of eight chars representing a
+a valid MVS membername which is not case sensitive. When no membername is given it defaults to no extension.
+ 
+The optional path is constructed from prefix start until last slash occurence.
+ 
+Extension (optional) is starting at the first colon after member
+</pre><p>  
+I've avoided to change much of the original logic until a major rewrite of the whole code.
+RECV390 will read for a single member extract the whole input file regardless which
+is the position of the member in the file. In the worst case, the member is on first position
+and after write of the member the large rest of the file is read without any use.
+</p><pre>  
+</pre><!--NewPage--><pre>   
+</pre><H2 style="page-break-after:avoid;">Chapter: Alias Processing</H2><pre> 
+</pre><p>  
+eho 20071204 V1R1M4
+</p><pre>  
+</pre><H3 style="page-break-after:avoid;">Topic: Overview</H3><pre> 
+</pre><p>  
+RECV390 1.4 is not able to process xmitted PDS with aliases on members.
+The program reads and stores the whole directory in memory and reads next
+the PDS data. It expects the data in the same sequence as the directory.
+Member entries and data are a kind of a linked list. First RECV390
+reads the member entry from a list, and next the associated data. When an alias is picked from the list,
+the logic binds the data of the next physical member in the sequence (Remember: An alias is a pointer) . But this causes an error, because the data belongs to the
+next <I>non-alias</I> entry. Afterthere the sequence is destroyed.
+</p><pre>  
+</pre><table width="100%" border="1"><tr><td><pre>   
+<B> Example Output:</B> 
+ 
+  ...
+ 
+  output            bytes    records
+  filename        written    written
+  ------------ ---------- ----------
+  member01.txt       1180         40 OK
+  member02.txt       4156        114 OK
+  alias01.txt        1120         33 error; ISPF statistics records: 114
+  Press enter to continue, or type 'x' to exit
+</pre></table><pre>  
+</pre><H3 style="page-break-after:avoid;">Topic: Implementation</H3><pre> 
+</pre><p>  
+To keep sync between member tab and data records, all alias entries will be ignored from the program logic.
+When an alias is found in the member list, it will be skipped with an appropriate
+message. The message names also the base member associated to.
+</p><pre>  
+</pre><table width="100%" border="1"><tr><td><pre>   
+<B>Example:</B> 
+ 
+  RECV020W Alias ALIAS1   points to Member BASEMEM1 . No extract.
+</pre></table><pre>  
+</pre><p>  
+Alias member will never be extracted. This is caused by the fact, that the existing
+logic depends on one phase of reading. Extracting an alias would need a resynchronisation.
+This is a todo for a later rewrite.
+ 
+Meantime the information given in message RECV020W is sufficient to handle
+necessary actions to a output member. This could be a copy command from base to alias member
+or a symbolic link in UNIX.
+</p><pre>  
+</pre><H3 style="page-break-after:avoid;">Topic: Indicator Byte</H3><pre> 
+</pre><p>  
+The PDS directory keeps several information about the members recorded. With the
+Indicator Byte also a flag is avaliable to determine the alias and wether ISPF statisics are in place.
+</p><pre>  
+</pre><table width="100%" border="1"><tr><td><pre>   
+<B>Format:</B> 
+        mmmmmmmmttti...
+        0-------8--1
+                   1
+ 
+                       with mmmmmmmm membername
+                            ttt      TTR of the member
+                            i        indicator byte    : 0x80 entry is an alias
+                                                       : 0x0F ISPF stats are there
+ 
+</pre></table><pre>  
+</pre><p>  
+The output listing of RECV390 shows this indicator byte (IB). So there is a chance
+to determine aliases in a XMIT PDS, without necessity to extract the whole XMIT.
+</p><pre>  
+</pre><table width="100%" border="1"><tr><td><pre>   
+$recv390 USER1.PDS.XMI
+ 
+TSO TRANSMIT dataset sent to user Y at node X
+from user USER1 at node ???????? on 10/20/2007 at 12:50:20
+contains one file.
+ 
+Dataset USER1.PDS
+Dsorg PO recfm VB blksize 27998 lrecl 255
+ 
+                                                     ----- LINES -----
+MEMBER      TTR IB VV.MM    CREATED         MODIFIED   CUR  INIT   MOD USERID
+ALIAS01  002308 8F 01.04 2007/04/03 2007/09/24 09:22    81    76     0 USER1
+ALIAS02  000111 80
+BASE01   002308 0F 01.04 2007/04/03 2007/09/24 09:22    81    76     0 USER1
+BASE02   000111 00
+MEM01    002201 00
+MEM02    001B05 0F 01.01 2007/06/12 2007/06/12 10:29   131    65     0 USER1
+MEM03    000113 0F 01.16 2007/03/13 2007/03/13 14:49    28    28     0 USER1
+</pre></table><pre>  
+</pre><p>  
+The directory output is sorted alphapetically. The base of an alias can be detemined by the common
+TTR.
+</p><pre>  
+</pre><H2 style="page-break-after:avoid;">Chapter: Embedded XMIT</H2><pre> 
+</pre><p>  
+eho 20071207 V1R1M5
+</p><pre>  
+</pre><H3 style="page-break-after:avoid;">Topic: Overview</H3><pre> 
+</pre><p>  
+Modified RECV390 detects embedded XMIT files at extraction time. Embedded XMITs are
+transmitted PDS which are stored again as members in a PDS. So one PDS can contain multiple XMIT files.
+This technique is suitable to pack multiple datasets into one XMIT.
+</p><pre>  
+</pre><H3 style="page-break-after:avoid;">Topic: Implementation</H3><pre> 
+</pre><p>  
+RECV390 with modification 5 detects at extraction time. If a XMIT-header (INMR01) is present. It justs report
+this fact in a message to stderr. This information can be used to process this output
+further. E.g renaming the extension of the file, or to reextract this member binary, when
+ASCII-translation was in place before (the parametet +binary preserves original structure of emedded
+XMITs).
+</p><pre>  
+</pre><table width="100%" border="1"><tr><td><pre>   
+$recv390 my.pds.xmi
+ 
+<B>Messages:</B> 
+            RECV030I EmbeddedXMIT  member1.txt . Output is binary.
+            RECV031I EmbeddedXMIT  member1.txt . Output is ASCII.
+</pre></table><pre>  
+</pre><!--NewPage--><pre>   
+</pre><H2 style="page-break-after:avoid;">Chapter: Binary Extract</H2><pre> 
+</pre><p>  
+eho 20071205 V1R1M5
+</p><pre>  
+</pre><H3 style="page-break-after:avoid;">Topic: Overview</H3><pre> 
+</pre><p>  
+Native RECV390 lacks support to extract member binary. The provided switch <B>-tran</B>, which
+keeps EBCDIC, inserts LF into output. But in some special cases it is necessary to
+avoid any translation or preparation at extraction time. This is typical the case, when the
+record format of the xmitted PDS is Undefined (RECFM=U), like Loadlibs. Another example is,
+when members of a PDS itself contain a xmitted PDS. In this scenario standard extract
+will produce a non usable output.
+</p><pre>  
+</pre><H3 style="page-break-after:avoid;">Topic: Implementation</H3><pre> 
+</pre><p>  
+Added new parameter <B>+binary</B>. The output will not be converted in any circumstance.
+Please be aware, there is no further logical treatment of data. The output statistics
+for record counter are set to zero because data is stream. Validation of counted
+output records versus ISPF statistic records is therefore passed.
+</p><pre>  
+</pre><table width="100%" border="1"><tr><td><pre>   
+<B> Example:</B> 
+           recv390 +write +binary my.pds.xmi xmit
+ 
+ 
+    There are 5 member(s) in the PDS directory.
+ 
+    output             bytes    records
+    filename         written    written
+    ------------- ---------- ----------
+    xmi0001.xmit       20240          0
+    xmi0002.xmit        8480          0
+    xmi0003.xmit       20480          0
+    xmi0004.xmit       98000          0
+    xmi0005.xmit       15120          0
+ 
+    Read 165440 bytes of test.xmi
+    Read 162320 bytes of TEST.XFER data
+    Wrote 5 files, 1881440 bytes, 0 records
+    Done
+</pre></table><pre>  
+</pre><p>  
+I didn't code any support for RECFM=V for this parameter. Storing a XMIT file
+to a Variable Record PDS would produce garbage with binary extract, because record
+descriptor words are treated as data.
+</p><pre>  
+</pre><H2 style="page-break-after:avoid;">Chapter: Optional Path specifications</H2><pre> 
+</pre><p>  
+eho 20071206 V1R1M5
+</p><pre>  
+</pre><H3 style="page-break-after:avoid;">Topic: Overview</H3><pre> 
+</pre><p>  
+RECV390 until V1R1M4 extracts members from a XMIT-PDS into the current directory. Same situation appears
+when +tran parameter is specified, only the current directory is searched for
+a fixed named file RECV30.MAP. This makes RECV390 difficult to use in some
+scripting environments. Especially when the scripting environment lacks full
+shell support (like REXX or PERL in Linux and WIN32).
+ 
+To resolve this issue, parameters are introduced to pass
+the information for extraction and transaltion to RECV390 at invocation time.
+</pre><p>  
+Specification of a translationmap has an additional advantage, because naming
+of the translationmap is free. More than one translationmap for different situations
+can be stored in a central directory.
+</pre><p>  
+Currently the path specifications are only valid without embedded blanks. This may
+change in a future release.
+</p><pre>  
+</pre><H3 style="page-break-after:avoid;">Topic:  Implementation Extractionpath</H3><pre> 
+</pre><table width="100%" border="1"><tr><td><pre>   
+Parameter: xpath=/path/to/extract/to
+ 
+Example:
+           recv390 +write my.pds.xmi xpath=/path/to
+ 
+           the members of the my.pds will be extracted to /path/to/ . Path must
+           exist.
+ 
+Messages:  RECV002I ExtractPath is /path/to.
+           RECV004E File /path/to/member.txt . Open error.
+</pre></table><pre>  
+</pre><H3 style="page-break-after:avoid;">Topic: Implementation Translationmap</H3><pre> 
+</pre><table width="100%" border="1"><tr><td><pre>   
+Parameter: tranmap=/path/to/translation.map
+ 
+Example:
+           recv390 +write +tran my.pds.xmi tranmap=/path/to/translation.map
+ 
+           the members of the my.pds will be translated to ascii with map
+           /path/to/translation.map. File transaltionmap should exist.
+ 
+Messages:  RECV003I TranslationTable is /path/to/translation.map .
+           RECV001E Translationtab /path/to/translation.map . Open Error.
+ 
+</pre></table><pre>  
+</pre><!--NewPage--><pre>   
+</pre><H1 style="page-break-after:avoid;">Part: Support and ToDos</H1><pre> 
+</pre><p>  
+RECV390 was created to extract text members from a fixed blocked partitioned dataset. I have
+added some functionality to the existing code to serve my purposes. If you have ideas to
+add some functionality I will try to add it. Description of bugs are also welcome. Contact me with a description, or even better
+add a solution and send me your changed code.
+ 
+ 
+But please keep in mind that the current code base needs restructuration and rewrite as a prerequisite
+to add huge functionalities. Support for DSORG=PS and support for PDSE would be nice. Also a complementary
+modul XMIT390 to build XMIT-files on PC would make some sense.
+</p><pre>  
+ 
+<hr>
